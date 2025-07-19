@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Solar Grid Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    h2 { margin-bottom: 10px; }
+    .charts {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 20px;
+    }
+    canvas {
+      background: white;
+      border: 1px solid #ccc;
+      padding: 10px;
+    }
+    .warning {
+      background-color: #ffe6e6;
+      border-left: 6px solid red;
+      padding: 10px;
+      color: #a10000;
+      margin-bottom: 20px;
+      display: none;
+    }
+    button {
+      padding: 10px 15px;
+      font-size: 16px;
+      background-color: #007bff;
+      color: white;
+      border: none;
+      margin-bottom: 20px;
+      cursor: pointer;
+    }
+    button:hover {
+      background-color: #0056b3;
+    }
+  </style>
+</head>
+<body>
+
+  <h2>🌞 Solar Grid Output Visualizer</h2>
+
+  <div id="faultAlert" class="warning">
+    ⚠️ Fault Detected: Check Voltage or Temperature!
+  </div>
+
+  <button onclick="window.location.href='/download'">
+    📁 Download CSV
+  </button>
+
+  <div class="charts">
+    <canvas id="voltageChart" width="400" height="200"></canvas>
+    <canvas id="currentChart" width="400" height="200"></canvas>
+    <canvas id="temperatureChart" width="400" height="200"></canvas>
+    <canvas id="powerChart" width="400" height="200"></canvas>
+  </div>
+
+  <script>
+    let voltageChart, currentChart, temperatureChart, powerChart;
+
+    function drawChart(id, label, data, color) {
+      const ctx = document.getElementById(id).getContext("2d");
+      return new Chart(ctx, {
+        type: 'line',
+        data: {
+          labels: data.map(d => d.timestamp),
+          datasets: [{
+            label: label,
+            data: data.map(d => d.value),
+            borderColor: color,
+            borderWidth: 2,
+            fill: false,
+            tension: 0.3
+          }]
+        },
+        options: {
+          responsive: true,
+          scales: {
+            y: { beginAtZero: false }
+          }
+        }
+      });
+    }
+
+    function loadAndRender() {
+      fetch('/data')
+        .then(res => res.json())
+        .then(data => {
+          if (data.length < 2) {
+            alert("⚠️ Please generate more data first.");
+            return;
+          }
+
+          const latest = data[data.length - 1];
+          const fault = latest.temperature > 65 || latest.voltage < 190 || latest.voltage > 250;
+          document.getElementById("faultAlert").style.display = fault ? "block" : "none";
+
+          const voltageData = data.map(d => ({ timestamp: d.timestamp, value: d.voltage }));
+          const currentData = data.map(d => ({ timestamp: d.timestamp, value: d.current }));
+          const temperatureData = data.map(d => ({ timestamp: d.timestamp, value: d.temperature }));
+          const powerData = data.map(d => ({ timestamp: d.timestamp, value: d.power }));
+
+          // Destroy previous charts
+          if (voltageChart) voltageChart.destroy();
+          if (currentChart) currentChart.destroy();
+          if (temperatureChart) temperatureChart.destroy();
+          if (powerChart) powerChart.destroy();
+
+          // Draw new charts
+          voltageChart = drawChart("voltageChart", "Voltage (V)", voltageData, "orange");
+          currentChart = drawChart("currentChart", "Current (A)", currentData, "green");
+          temperatureChart = drawChart("temperatureChart", "Temperature (°C)", temperatureData, "red");
+          powerChart = drawChart("powerChart", "Power (kW)", powerData, "blue");
+        })
+        .catch(err => {
+          console.error("Error fetching data:", err);
+        });
+    }
+
+    loadAndRender();
+    setInterval(loadAndRender, 10000); // Refresh every 10 seconds
+  </script>
+
+</body>
+</html>
